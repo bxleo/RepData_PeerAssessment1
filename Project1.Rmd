@@ -1,0 +1,111 @@
+---
+title: "Reproducible Research Project 1"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Load the package and data
+
+Load the package.
+```{r}
+library(dplyr)
+library(lattice)
+```
+
+
+Download and upzip data.
+
+```{r eval = FALSE}
+download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip", "activity.zip")
+unzip("activity.zip")
+```
+
+Read the data. Transform the date column into date format.
+
+```{r}
+data <- read.csv("activity.csv")
+data$date <- as.Date(data$date)
+str(data)
+summary(data)
+head(data,6)
+```
+
+
+## What is mean total number of steps taken per day?
+
+```{r}
+steps_per_day <- data %>% group_by(date) %>% summarise_at(vars(steps), funs(sum(., na.rm = TRUE)))
+hist(steps_per_day$steps, main = "Total number of steps taken per day")
+steps_per_day_mean = mean(steps_per_day$steps)
+steps_per_day_median = median(steps_per_day$steps)
+```
+
+**The mean of the total number of steps taken per day is `r steps_per_day_mean`, the median is `r steps_per_day_median`.**
+
+
+## What is the average daily activity pattern?
+
+```{r}
+steps_per_interval <- data %>% group_by(interval) %>% summarise_at(vars(steps), funs(steps_avg = mean(., na.rm = TRUE)))
+head(steps_per_interval)
+with(steps_per_interval, plot(interval, steps_avg, type = "l"))
+steps_per_interval_max <- max(steps_per_interval$steps_avg)
+steps_per_interval_max_loc <- steps_per_interval$interval[which(steps_per_interval$steps_avg == steps_per_interval_max)]
+
+```
+
+**The 5-minute interval whose value is `r steps_per_interval_max_loc` has the maximum averaged number of steps.**  
+**The maximum is `r steps_per_interval_max`.**
+
+
+## Imputing missing values
+
+```{r}
+num_missing <- sum(is.na(data$steps))
+```
+
+**The total number of missing values is `r num_missing`. **  
+
+Use the averaged number of steps in each 5-min interval to imput the missing data.  
+
+```{r}
+data2 <- data
+missingRows <- data2[is.na(data2$steps), ]
+imputedRows<- left_join(missingRows, steps_per_interval, by = "interval")
+data2$steps[is.na(data2$steps)] <- imputedRows$steps_avg
+```
+
+data2 is the new dataset after imputation of missing values.
+
+```{r}
+steps_per_day2 <- data2 %>% group_by(date) %>% summarise_at(vars(steps), funs(sum(., na.rm = TRUE)))
+hist(steps_per_day2$steps, main = "Total number of steps taken per day")
+steps_per_day_mean2 = mean(steps_per_day2$steps)
+steps_per_day_median2 = median(steps_per_day2$steps)
+```
+
+**After imputing the missing values, the mean of the total number of steps taken per day is `r steps_per_day_mean2`, the median is `r steps_per_day_median2`. The values differ from the estimates from the first part of the assignment. Imputing missing data reduces the frequency of having a small total number of steps in a day, and makes the histogram more symmetric. **
+
+
+## Are there differences in activity patterns between weekdays and weekends?
+
+Create a new factor variable in the dataset with two levels - "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.
+
+```{r}
+data2 <- mutate(data2, day = weekdays(date))
+whatdayis <- data.frame(day = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"), 
+                        isWeekday = c("weekday", "weekday", "weekday", "weekday", "weekday", "weekend", "weekend"))
+data2 <- left_join(data2, whatdayis, by = "day")
+```
+
+Make a panel plot containing a time series plot of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis).
+
+```{r}
+steps_per_interval2 <- data2 %>% group_by(isWeekday, interval) %>% summarise_at(vars(steps), funs(steps_avg = mean(., na.rm = TRUE)))
+xyplot(steps_avg ~ interval | isWeekday, data = steps_per_interval2, type = "l", layout = c(1, 2))
+```
+
